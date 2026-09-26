@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>大王虎甲蟲野外調查與天擇掠食數據庫 (Manticora Field Survey)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Leaflet CSS & JS CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+TC:wght@300;400;600;700&display=swap');
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: #0c0f0d;
+      color: #e2e8f0;
+    }
+    .font-mono-num {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* 自訂深色滾動條 */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #121814; }
+    ::-webkit-scrollbar-thumb { background: #233527; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #2e4a34; }
+    
+    /* Leaflet 地圖深色自訂樣式 */
+    #map { min-height: 480px; background-color: #1e293b; }
+    .leaflet-popup-content-wrapper {
+      background-color: #181c19 !important;
+      color: #f1f5f9 !important;
+      border: 1px solid #334155;
+      border-radius: 0.75rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7);
+    }
+    .leaflet-popup-tip { background-color: #181c19 !important; border: 1px solid #334155; }
+    .map-dark-tiles {
+      filter: brightness(0.75) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+    }
+  </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+  <!-- 頂部頁首導覽 -->
+  <header class="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row md:items-center justify-between border-b border-stone-800 pb-5 gap-4">
+    <div class="flex items-center gap-4">
+      <div class="p-3 bg-emerald-950/70 border border-emerald-500/40 rounded-xl text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+        <i data-lucide="dna" class="w-8 h-8"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded font-mono">FIELD DATA HUB</span>
+          <span class="text-xs text-stone-500 font-mono">GENUS MANTICORA RESEARCH</span>
+        </div>
+        <h1 class="text-xl md:text-2xl font-bold text-stone-100 tracking-wide mt-1">大王虎甲蟲野外調查與天擇掠食數據庫</h1>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="../index.html" class="flex items-center gap-2 bg-stone-800 hover:bg-stone-700 text-cyan-400 border border-cyan-500/40 px-3 py-2 rounded-lg text-xs font-semibold transition active:scale-95">
+        <i data-lucide="compass" class="w-4 h-4"></i> 前往 NASA Eyes 觀測儀表板
+      </a>
+      <button onclick="openModal()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-xs font-semibold transition active:scale-95 shadow-md shadow-emerald-950">
+        <i data-lucide="plus-circle" class="w-4 h-4"></i> 新增調查紀錄
+      </button>
+      <button onclick="exportCSV()" class="flex items-center gap-2 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 px-4 py-2 rounded-lg text-xs font-semibold transition active:scale-95">
+        <i data-lucide="download" class="w-4 h-4"></i> 匯出 CSV
+      </button>
+    </div>
+  </header>
+
+  <!-- 全域核心 KPI 橫條（跨分頁常駐） -->
+  <section class="max-w-7xl mx-auto mb-6 grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div class="bg-stone-900/60 border border-stone-800 p-4 rounded-xl">
+      <div class="text-stone-400 text-[11px] uppercase tracking-wider flex items-center justify-between">
+        <span>樣本總數</span>
+        <i data-lucide="database" class="w-3.5 h-3.5 text-emerald-500"></i>
+      </div>
+      <div id="kpiTotal" class="text-2xl font-bold text-stone-100 font-mono-num mt-1">--</div>
+      <div class="text-[10px] text-stone-500 font-mono mt-1">有效觀測標本</div>
+    </div>
+
+    <div class="bg-stone-900/60 border border-stone-800 p-4 rounded-xl">
+      <div class="text-stone-400 text-[11px] uppercase tracking-wider flex items-center justify-between">
+        <span>最大紀錄體長</span>
+        <i data-lucide="ruler" class="w-3.5 h-3.5 text-amber-500"></i>
+      </div>
+      <div class="flex items-baseline gap-1 mt-1">
+        <span id="kpiMaxLen" class="text-2xl font-bold text-amber-400 font-mono-num">--</span>
+        <span class="text-xs text-stone-400 font-mono">mm</span>
+      </div>
+      <div id="kpiMaxDetail" class="text-[10px] text-stone-500 font-mono mt-1 truncate">--</div>
+    </div>
+
+    <div class="bg-stone-900/60 border border-stone-800 p-4 rounded-xl">
+      <div class="text-stone-400 text-[11px] uppercase tracking-wider flex items-center justify-between">
+        <span>性擇武器非對稱比</span>
+        <i data-lucide="scale" class="w-3.5 h-3.5 text-purple-400"></i>
+      </div>
+      <div class="flex items-baseline gap-1 mt-1">
+        <span id="kpiAsymIndex" class="text-2xl font-bold text-purple-400 font-mono-num">--</span>
+        <span class="text-xs text-stone-400 font-mono">R/L</span>
+      </div>
+      <div id="kpiAsymDiff" class="text-[10px] text-stone-500 font-mono mt-1">雄性右顎顯著特化</div>
+    </div>
+
+    <div class="bg-stone-900/60 border border-stone-800 p-4 rounded-xl">
+      <div class="text-stone-400 text-[11px] uppercase tracking-wider flex items-center justify-between">
+        <span>平均捕獵成功率</span>
+        <i data-lucide="target" class="w-3.5 h-3.5 text-rose-400"></i>
+      </div>
+      <div class="flex items-baseline gap-1 mt-1">
+        <span id="kpiStrikeRate" class="text-2xl font-bold text-rose-400 font-mono-num">--</span>
+        <span class="text-xs text-stone-400 font-mono">%</span>
+      </div>
+      <div class="text-[10px] text-stone-500 font-mono mt-1">夜間突襲捕食效率</div>
+    </div>
+
+    <div class="bg-stone-900/60 border border-stone-800 p-4 rounded-xl col-span-2 md:col-span-1">
+      <div class="text-stone-400 text-[11px] uppercase tracking-wider flex items-center justify-between">
+        <span>平均制伏時間</span>
+        <i data-lucide="timer" class="w-3.5 h-3.5 text-cyan-400"></i>
+      </div>
+      <div class="flex items-baseline gap-1 mt-1">
+        <span id="kpiAvgSubdue" class="text-2xl font-bold text-cyan-400 font-mono-num">--</span>
+        <span class="text-xs text-stone-400 font-mono">秒</span>
+      </div>
+      <div id="kpiSubdueCompare" class="text-[10px] text-stone-500 font-mono mt-1">♀ 撕咬較敏捷</div>
+    </div>
+  </section>
+
+  <!-- 條理化分頁標籤按鈕 (Tabs) -->
+  <nav class="max-w-7xl mx-auto mb-6 flex border-b border-stone-800 gap-2 text-xs font-semibold">
+    <button onclick="switchTab('tab-map')" id="btn-tab-map" class="tab-btn pb-3 px-4 flex items-center gap-2 border-b-2 border-emerald-500 text-emerald-400 transition">
+      <i data-lucide="map-pin" class="w-4 h-4"></i> 1. GIS 採集樣區地圖
+    </button>
+    <button onclick="switchTab('tab-selection')" id="btn-tab-selection" class="tab-btn pb-3 px-4 flex items-center gap-2 border-b-2 border-transparent text-stone-400 hover:text-stone-200 transition">
+      <i data-lucide="git-branch" class="w-4 h-4"></i> 2. 物競天擇與演化分析
+    </button>
+    <button onclick="switchTab('tab-predation')" id="btn-tab-predation" class="tab-btn pb-3 px-4 flex items-center gap-2 border-b-2 border-transparent text-stone-400 hover:text-stone-200 transition">
+      <i data-lucide="utensils" class="w-4 h-4"></i> 3. 掠食生態與行為統計
+    </button>
+    <button onclick="switchTab('tab-data')" id="btn-tab-data" class="tab-btn pb-3 px-4 flex items-center gap-2 border-b-2 border-transparent text-stone-400 hover:text-stone-200 transition">
+      <i data-lucide="table" class="w-4 h-4"></i> 4. 原始調查資料庫
+    </button>
+  </nav>
+
+  <main class="max-w-7xl mx-auto">
+
+    <!-- ==================== 分頁 1: GIS 採集樣區地圖 ==================== -->
+    <div id="tab-map" class="tab-panel space-y-4">
+      <div class="bg-stone-900/60 border border-stone-800 p-5 rounded-xl">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+          <div>
+            <h2 class="text-sm font-semibold text-stone-200">非洲南部（Southern Africa）野外調查樣點空間分佈</h2>
+            <p class="text-xs text-stone-500 mt-0.5">點擊標記可顯示該隻大王虎甲之體長、巨顎比例、目擊獵物與適應位階。</p>
+          </div>
+          <div class="flex items-center gap-2 text-xs font-mono">
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-emerald-300"></span> 雄性 ♂</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 border border-amber-300"></span> 雌性 ♀</span>
+            <button onclick="toggleTileStyle()" class="px-2 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded border border-stone-700 transition ml-2">切換底圖</button>
+            <button onclick="resetMapView()" class="px-2 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded border border-stone-700 transition">重置視野</button>
+          </div>
+        </div>
+        <div id="map" class="w-full rounded-lg border border-stone-800 overflow-hidden relative"></div>
+      </div>
+    </div>
+
+    <!-- ==================== 分頁 2: 物競天擇與演化分析 ==================== -->
+    <div id="tab-selection" class="tab-panel hidden space-y-6">
+      <!-- 達爾文演化機制 4 階段卡片 -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+        <div class="bg-stone-900/60 border border-stone-800 p-4 rounded-xl flex flex-col justify-between">
+          <div>
+            <div class="text-emerald-400 font-bold mb-1.5 flex items-center gap-1.5 font-mono">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 1. 個體變異 (Variation)
+            </div>
+            <p class="text-stone-300 leading-relaxed">
+              同一野生族群中，體長介於 45-70mm 之間，雄蟲右顎不對稱比（R/L）呈現 1.10 至 1.30 的顯著發育多樣性。
+            </p>
+          </div>
+          <div class="text-[10px] text-stone-500 font-mono mt-3">遺傳多樣性基礎</div>
+        </div>
+
+        <div class="bg-stone-900/60 border border-stone-800 p-4 rounded-xl flex flex-col justify-between">
+          <div>
+            <div class="text-cyan-400 font-bold mb-1.5 flex items-center gap-1.5 font-mono">
+              <span class="w-2 h-2 rounded-full bg-cyan-400"></span> 2. 生存鬥爭 (Competition)
+            </div>
+            <p class="text-stone-300 leading-relaxed">
+              雨季初期紅砂荒漠獵物資源有限，雄蟲為爭奪領地與配偶發生激烈的同性搏鬥（Male Combat），巨顎成為主要制勝武器。
+            </p>
+          </div>
+          <div class="text-[10px] text-stone-500 font-mono mt-3">環境資源承載極限</div>
+        </div>
+
+        <div class="bg-stone-900/60 border border-stone-800 p-4 rounded-xl flex flex-col justify-between">
+          <div>
+            <div class="text-purple-400 font-bold mb-1.5 flex items-center gap-1.5 font-mono">
+              <span class="w-2 h-2 rounded-full bg-purple-400"></span> 3. 天擇與性擇權衡 (Trade-off)
+            </div>
+            <p class="text-stone-300 leading-relaxed">
+              性擇促使巨顎向極致演化；但過重的大顎會增加奔馳能耗、降低獵殺靈活性並增加天敵發現率（累贅原則）。
+            </p>
+          </div>
+          <div class="text-[10px] text-stone-500 font-mono mt-3">性擇 vs 天擇拉鋸</div>
+        </div>
+
+        <div class="bg-stone-900/60 border border-stone-800 p-4 rounded-xl flex flex-col justify-between">
+          <div>
+            <div class="text-amber-400 font-bold mb-1.5 flex items-center gap-1.5 font-mono">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span> 4. 適者生存 (Adaptation)
+            </div>
+            <p class="text-stone-300 leading-relaxed">
+              大顎與體型達到最適力學平衡點（Optimal Allometry）的個體獲得最高繁殖成功率，基因得以在嚴苛荒漠中保留。
+            </p>
+          </div>
+          <div class="text-[10px] text-stone-500 font-mono mt-3">演化動態平衡</div>
+        </div>
+      </div>
+
+      <!-- 異速生長散佈圖與體長直方圖並排 -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-stone-900/60 border border-stone-800 p-5 rounded-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-semibold text-stone-200 flex items-center gap-2">
+              <i data-lucide="scatter-chart" class="w-4 h-4 text-emerald-400"></i> 異速生長關係散佈圖 (體長 vs 右巨顎)
+            </h3>
+            <span class="text-[11px] text-stone-500 font-mono">性擇特化檢定</span>
+          </div>
+          <div class="h-64 relative">
+            <canvas id="allometryChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-stone-900/60 border border-stone-800 p-5 rounded-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-semibold text-stone-200 flex items-center gap-2">
+              <i data-lucide="bar-chart-2" class="w-4 h-4 text-amber-400"></i> 族群體長頻率分佈 (公 / 母對比)
+            </h3>
+            <span class="text-[11px] text-stone-500 font-mono">天擇穩定化選汰</span>
+          </div>
+          <div class="h-64 relative">
+            <canvas id="sizeHistogram"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 分頁 3: 掠食生態與行為統計 ==================== -->
+    <div id="tab-predation" class="tab-panel hidden space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- 獵物類別佔比圓餅圖 -->
+        <div class="bg-stone-900/60 border border-stone-800 p-5 rounded-xl flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-semibold text-stone-200 flex items-center gap-2">
+              <i data-lucide="pie-chart" class="w-4 h-4 text-rose-400"></i> 主要獵物類別佔比
+            </h3>
+            <span class="text-[11px] text-stone-500 font-mono">食性分佈</span>
+          </div>
+          <div class="h-64 relative flex items-center justify-center">
+            <canvas id="preyChart"></canvas>
+          </div>
+          <div class="text-[11px] text-stone-400 mt-2 text-center font-mono">以硬甲擬步行蟲與直翅目為主</div>
+        </div>
+
+        <!-- 樣區微棲地佔比圓餅圖 -->
+        <div class="bg-stone-900/60 border border-stone-800 p-5 rounded-xl flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-semibold text-stone-200 flex items-center gap-2">
+              <i data-lucide="pie-chart" class="w-4 h-4 text-amber-400"></i> 樣區棲地捕獲佔比
+            </h3>
+            <span class="text-[11px] text-stone-500 font-mono">微棲地適應</span>
+          </div>
+          <div class="h-64 relative flex items-center justify-center">
+            <canvas id="locationChart"></canvas>
+          </div>
+          <div class="text-[11px] text-stone-400 mt-2 text-center font-mono">乾燥紅砂荒漠族群密度最高</div>
+        </div>
+
+        <!-- 採集手法佔比圓餅圖 -->
+        <div class="bg-stone-900/60 border border-stone-800 p-5 rounded-xl flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-semibold text-stone-200 flex items-center gap-2">
+              <i data-lucide="circle-dot" class="w-4 h-4 text-cyan-400"></i> 採集調查手法佔比
+            </h3>
+            <span class="text-[11px] text-stone-500 font-mono">方法效率</span>
+          </div>
+          <div class="h-64 relative flex items-center justify-center">
+            <canvas id="methodChart"></canvas>
+          </div>
+          <div class="text-[11px] text-stone-400 mt-2 text-center font-mono">夜間手持目視捕獲佔大宗</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 分頁 4: 原始調查資料庫 ==================== -->
+    <div id="tab-data" class="tab-panel hidden space-y-4">
+      <div class="bg-stone-900/60 border border-stone-800 rounded-xl overflow-hidden">
+        <!-- 搜尋與篩選列 -->
+        <div class="p-4 border-b border-stone-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2.5">
+            <div class="relative min-w-[200px]">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-2.5 text-stone-500"></i>
+              <input type="text" id="searchInput" oninput="renderTable()" placeholder="搜尋編號、樣點、獵物、記錄人..." class="w-full bg-stone-950 border border-stone-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-stone-200 focus:outline-none focus:border-emerald-500 placeholder:text-stone-600">
+            </div>
+            <select id="sexFilter" onchange="renderTable()" class="bg-stone-950 border border-stone-700/80 rounded-lg px-2.5 py-1.5 text-xs text-stone-300 focus:outline-none focus:border-emerald-500">
+              <option value="ALL">全部性別</option>
+              <option value="Male">雄性 (♂)</option>
+              <option value="Female">雌性 (♀)</option>
+            </select>
+            <select id="preyFilter" onchange="renderTable()" class="bg-stone-950 border border-stone-700/80 rounded-lg px-2.5 py-1.5 text-xs text-stone-300 focus:outline-none focus:border-emerald-500">
+              <option value="ALL">全部獵物</option>
+              <option value="黑身擬步行蟲">黑身擬步行蟲</option>
+              <option value="沙漠直翅目蟋蟀">沙漠直翅目蟋蟀</option>
+              <option value="沙漠避日蛛">沙漠避日蛛</option>
+              <option value="粗尾蠍幼體">粗尾蠍幼體</option>
+              <option value="白蟻繁殖蟻群">白蟻繁殖蟻群</option>
+            </select>
+          </div>
+          <div class="text-xs text-stone-400 font-mono flex items-center gap-2">
+            <span>篩選結果：</span>
+            <span id="recordCount" class="text-emerald-400 font-semibold">0</span>
+          </div>
+        </div>
+
+        <!-- 數據表格 -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-stone-300">
+            <thead class="bg-stone-950/70 border-b border-stone-800 text-stone-400 uppercase font-mono tracking-wider">
+              <tr>
+                <th class="py-3 px-4">標本 ID</th>
+                <th class="py-3 px-4">採集時間</th>
+                <th class="py-3 px-4">樣區地點</th>
+                <th class="py-3 px-4">性別</th>
+                <th class="py-3 px-4">體長 (mm)</th>
+                <th class="py-3 px-4">巨顎 (R/L)</th>
+                <th class="py-3 px-4">捕獲時獵物</th>
+                <th class="py-3 px-4">獵物長度</th>
+                <th class="py-3 px-4">制伏時間</th>
+                <th class="py-3 px-4">成功率</th>
+                <th class="py-3 px-4">天擇適應位階</th>
+                <th class="py-3 px-4 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody id="dataTableBody" class="divide-y divide-stone-800/60 font-mono">
+              <!-- 動態渲染 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 新增紀錄 Modal 彈跳視窗 -->
+  <div id="addModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-stone-900 border border-stone-700 w-full max-w-xl rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+      <div class="p-4 border-b border-stone-800 flex justify-between items-center bg-stone-950">
+        <h3 class="text-xs font-semibold text-stone-100 flex items-center gap-2">
+          <i data-lucide="plus-circle" class="w-4 h-4 text-emerald-400"></i> 新增野外調查與掠食紀錄
+        </h3>
+        <button onclick="closeModal()" class="text-stone-400 hover:text-stone-200">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      
+      <form id="recordForm" onsubmit="handleFormSubmit(event)" class="p-5 space-y-4 overflow-y-auto text-xs">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-stone-400 mb-1">標本編號 (ID)</label>
+            <input type="text" id="formId" required placeholder="如 MAN-2026-012" class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-stone-400 mb-1">採集時間</label>
+            <input type="datetime-local" id="formDate" required class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-stone-400 mb-1">樣區地點</label>
+            <select id="formLocation" onchange="autoFillCoords()" required class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+              <option value="喀拉哈里紅砂地 (區A)">喀拉哈里紅砂地 (區A)</option>
+              <option value="林波波金合歡灌叢 (區B)">林波波金合歡灌叢 (區B)</option>
+              <option value="莫三比克稀樹草原 (區C)">莫三比克稀樹草原 (區C)</option>
+              <option value="納米比亞過渡帶 (區D)">納米比亞過渡帶 (區D)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-stone-400 mb-1">性別</label>
+            <select id="formSex" required class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+              <option value="Male">雄性 (Male ♂)</option>
+              <option value="Female">雌性 (Female ♀)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-stone-400 mb-1">緯度 (Latitude)</label>
+            <input type="number" step="0.0001" id="formLat" required class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-stone-400 mb-1">經度 (Longitude)</label>
+            <input type="number" step="0.0001" id="formLng" required class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-stone-400 mb-1">體長 (mm)</label>
+            <input type="number" step="0.1" id="formLength" required placeholder="45.0 - 68.0" class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-stone-400 mb-1">左顎長 (mm)</label>
+            <input type="number" step="0.1" id="formMandibleLeft" required placeholder="7.0 - 18.0" class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-stone-400 mb-1">右顎長 (mm)</label>
+            <input type="number" step="0.1" id="formMandibleRight" required placeholder="8.0 - 22.0" class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+          </div>
+        </div>
+
+        <div class="p-3 bg-stone-950/80 border border-rose-900/40 rounded-lg space-y-3">
+          <div class="text-rose-400 font-semibold flex items-center gap-1.5">
+            <i data-lucide="crosshair" class="w-3.5 h-3.5"></i> 掠食行為數據
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-stone-400 mb-1">捕食獵物類別</label>
+              <select id="formPreyType" required class="w-full bg-stone-900 border border-stone-700 rounded p-2 text-stone-200 focus:border-rose-500 outline-none">
+                <option value="黑身擬步行蟲">黑身擬步行蟲</option>
+                <option value="沙漠直翅目蟋蟀">沙漠直翅目蟋蟀</option>
+                <option value="沙漠避日蛛">沙漠避日蛛</option>
+                <option value="粗尾蠍幼體">粗尾蠍幼體</option>
+                <option value="白蟻繁殖蟻群">白蟻繁殖蟻群</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-stone-400 mb-1">獵物長度 (mm)</label>
+              <input type="number" step="0.5" id="formPreySize" required placeholder="18.0" class="w-full bg-stone-900 border border-stone-700 rounded p-2 text-stone-200 focus:border-rose-500 outline-none">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-stone-400 mb-1">制伏時間 (秒)</label>
+              <input type="number" step="1" id="formSubdueTime" required placeholder="25" class="w-full bg-stone-900 border border-stone-700 rounded p-2 text-stone-200 focus:border-rose-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-stone-400 mb-1">成功率 (%)</label>
+              <input type="number" step="1" min="0" max="100" id="formStrikeSuccess" required placeholder="85" class="w-full bg-stone-900 border border-stone-700 rounded p-2 text-stone-200 focus:border-rose-500 outline-none">
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-stone-400 mb-1">氣溫 (°C)</label>
+            <input type="number" step="0.5" id="formTemp" required placeholder="24.5" class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-stone-400 mb-1">採集手法</label>
+            <select id="formMethod" required class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+              <option value="目視手捕捉">目視手捕捉</option>
+              <option value="大型地陷式陷阱">大型地陷式陷阱</option>
+              <option value="黑光燈誘捕">黑光燈誘捕</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-stone-400 mb-1">調查員</label>
+            <input type="text" id="formCollector" required placeholder="姓名" class="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-200 focus:border-emerald-500 outline-none">
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-stone-800 flex justify-end gap-2">
+          <button type="button" onclick="closeModal()" class="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded font-medium">取消</button>
+          <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-medium">儲存紀錄</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const locationDefaults = {
+      "喀拉哈里紅砂地 (區A)": { lat: -25.75, lng: 21.20 },
+      "林波波金合歡灌叢 (區B)": { lat: -23.40, lng: 29.40 },
+      "莫三比克稀樹草原 (區C)": { lat: -21.80, lng: 33.20 },
+      "納米比亞過渡帶 (區D)": { lat: -22.56, lng: 17.08 }
+    };
+
+    let surveyData = [
+      { id: "MAN-2026-001", date: "2026-09-03 21:15", location: "喀拉哈里紅砂地 (區A)", lat: -25.742, lng: 21.189, sex: "Male", length: 65.4, mandibleL: 16.5, mandibleR: 19.8, prey: "黑身擬步行蟲", preySize: 22.0, subdueTime: 24, strikeRate: 88, temp: 24.5, method: "目視手捕捉", collector: "Dr. K. Vance" },
+      { id: "MAN-2026-002", date: "2026-09-03 22:40", location: "喀拉哈里紅砂地 (區A)", lat: -25.789, lng: 21.231, sex: "Female", length: 51.2, mandibleL: 10.9, mandibleR: 11.2, prey: "沙漠直翅目蟋蟀", preySize: 18.5, subdueTime: 12, strikeRate: 92, temp: 23.8, method: "大型地陷式陷阱", collector: "Dr. K. Vance" },
+      { id: "MAN-2026-003", date: "2026-09-05 20:50", location: "林波波金合歡灌叢 (區B)", lat: -23.385, lng: 29.421, sex: "Male", length: 67.8, mandibleL: 17.2, mandibleR: 21.2, prey: "沙漠避日蛛", preySize: 28.0, subdueTime: 38, strikeRate: 80, temp: 25.1, method: "目視手捕捉", collector: "T. Ndlovu" },
+      { id: "MAN-2026-004", date: "2026-09-06 01:20", location: "林波波金合歡灌叢 (區B)", lat: -23.412, lng: 29.395, sex: "Female", length: 48.7, mandibleL: 9.8, mandibleR: 10.1, prey: "黑身擬步行蟲", preySize: 16.0, subdueTime: 15, strikeRate: 90, temp: 21.0, method: "大型地陷式陷阱", collector: "T. Ndlovu" },
+      { id: "MAN-2026-005", date: "2026-09-08 23:10", location: "莫三比克稀樹草原 (區C)", lat: -21.821, lng: 33.195, sex: "Male", length: 62.0, mandibleL: 14.8, mandibleR: 17.5, prey: "粗尾蠍幼體", preySize: 26.5, subdueTime: 42, strikeRate: 75, temp: 26.2, method: "目視手捕捉", collector: "Dr. K. Vance" },
+      { id: "MAN-2026-006", date: "2026-09-10 21:45", location: "納米比亞過渡帶 (區D)", lat: -22.541, lng: 17.062, sex: "Male", length: 66.2, mandibleL: 16.8, mandibleR: 20.4, prey: "黑身擬步行蟲", preySize: 24.0, subdueTime: 28, strikeRate: 85, temp: 22.4, method: "目視手捕捉", collector: "L. Meyer" },
+      { id: "MAN-2026-007", date: "2026-09-11 02:00", location: "納米比亞過渡帶 (區D)", lat: -22.580, lng: 17.110, sex: "Female", length: 53.5, mandibleL: 11.4, mandibleR: 11.8, prey: "沙漠直翅目蟋蟀", preySize: 19.0, subdueTime: 11, strikeRate: 94, temp: 19.5, method: "大型地陷式陷阱", collector: "L. Meyer" },
+      { id: "MAN-2026-008", date: "2026-09-14 20:30", location: "喀拉哈里紅砂地 (區A)", lat: -25.711, lng: 21.155, sex: "Male", length: 68.2, mandibleL: 17.6, mandibleR: 21.5, prey: "沙漠避日蛛", preySize: 31.0, subdueTime: 45, strikeRate: 78, temp: 25.0, method: "目視手捕捉", collector: "Dr. K. Vance" },
+      { id: "MAN-2026-009", date: "2026-09-15 22:15", location: "林波波金合歡灌叢 (區B)", lat: -23.445, lng: 29.438, sex: "Female", length: 50.1, mandibleL: 10.5, mandibleR: 10.8, prey: "白蟻繁殖蟻群", preySize: 12.0, subdueTime: 8, strikeRate: 96, temp: 23.2, method: "目視手捕捉", collector: "T. Ndlovu" },
+      { id: "MAN-2026-010", date: "2026-09-18 23:50", location: "莫三比克稀樹草原 (區C)", lat: -21.780, lng: 33.235, sex: "Male", length: 59.8, mandibleL: 13.9, mandibleR: 16.2, prey: "黑身擬步行蟲", preySize: 20.0, subdueTime: 22, strikeRate: 82, temp: 24.8, method: "黑光燈誘捕", collector: "Dr. K. Vance" },
+      { id: "MAN-2026-011", date: "2026-09-20 00:35", location: "納米比亞過渡帶 (區D)", lat: -22.595, lng: 17.045, sex: "Female", length: 52.0, mandibleL: 10.8, mandibleR: 11.0, prey: "白蟻繁殖蟻群", preySize: 13.5, subdueTime: 9, strikeRate: 95, temp: 20.1, method: "大型地陷式陷阱", collector: "L. Meyer" }
+    ];
+
+    let allometryChart = null;
+    let preyChart = null;
+    let histChart = null;
+    let locChart = null;
+    let methodChart = null;
+    let map = null;
+    let tileLayer = null;
+    let markersLayer = null;
+    let isDarkTiles = true;
+
+    // 分頁切換函式
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-emerald-500', 'text-emerald-400');
+        btn.classList.add('border-transparent', 'text-stone-400');
+      });
+
+      document.getElementById(tabId).classList.remove('hidden');
+      const activeBtn = document.getElementById(`btn-${tabId}`);
+      activeBtn.classList.remove('border-transparent', 'text-stone-400');
+      activeBtn.classList.add('border-emerald-500', 'text-emerald-400');
+
+      if (tabId === 'tab-map' && map) {
+        setTimeout(() => map.invalidateSize(), 200);
+      }
+    }
+
+    function getSelectionTier(item) {
+      if (item.sex === 'Female') {
+        return { label: '生殖繁衍優化型', color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
+      }
+      const asym = item.mandibleR / item.mandibleL;
+      if (item.mandibleR >= 20.0 && asym >= 1.20) {
+        return { label: '性擇極致武器型', color: 'text-purple-400 bg-purple-500/10 border-purple-500/30' };
+      } else if (item.mandibleR >= 16.0) {
+        return { label: '天擇最適平衡型', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
+      } else {
+        return { label: '初階發育過渡型', color: 'text-stone-400 bg-stone-500/10 border-stone-500/30' };
+      }
+    }
+
+    function initMap() {
+      map = L.map('map', {
+        zoomControl: true,
+        scrollWheelZoom: true
+      }).setView([-23.5, 25.0], 5);
+
+      tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors',
+        className: 'map-dark-tiles'
+      }).addTo(map);
+
+      markersLayer = L.layerGroup().addTo(map);
+      updateMapMarkers();
+
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 300);
+    }
+
+    function toggleTileStyle() {
+      if (!tileLayer) return;
+      isDarkTiles = !isDarkTiles;
+      const container = tileLayer.getContainer();
+      if (container) {
+        container.classList.toggle('map-dark-tiles', isDarkTiles);
+      }
+    }
+
+    function updateMapMarkers() {
+      if (!markersLayer) return;
+      markersLayer.clearLayers();
+
+      surveyData.forEach(item => {
+        if (!item.lat || !item.lng) return;
+
+        const isMale = item.sex === 'Male';
+        const color = isMale ? '#10b981' : '#f59e0b';
+        const asym = (item.mandibleR / item.mandibleL).toFixed(2);
+        const tier = getSelectionTier(item);
+
+        const marker = L.circleMarker([item.lat, item.lng], {
+          radius: 8,
+          fillColor: color,
+          color: '#ffffff',
+          weight: 2,
+          opacity: 0.95,
+          fillOpacity: 0.85
+        });
+
+        const popupContent = `
+          <div class="text-xs p-1 space-y-1 font-mono">
+            <div class="font-bold text-sm flex items-center justify-between border-b border-stone-700 pb-1" style="color: ${color}">
+              <span>${item.id}</span>
+              <span>${isMale ? '♂ 雄性' : '♀ 雌性'}</span>
+            </div>
+            <div class="text-stone-300 font-sans mt-1">棲地：${item.location}</div>
+            <div class="text-stone-400">體長：<strong class="text-stone-100">${item.length.toFixed(1)} mm</strong> (右顎: ${item.mandibleR}mm)</div>
+            <div class="text-rose-400">目擊獵物：${item.prey} (${item.preySize}mm)</div>
+            <div class="text-stone-400">制伏時間：${item.subdueTime}s • 成功率：${item.strikeRate}%</div>
+            <div class="text-[11px] mt-1"><span class="px-1.5 py-0.5 rounded border ${tier.color}">${tier.label}</span></div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        markersLayer.addLayer(marker);
+      });
+    }
+
+    function resetMapView() {
+      if (map) map.setView([-23.5, 25.0], 5);
+    }
+
+    function focusMap(lat, lng) {
+      switchTab('tab-map');
+      if (map) {
+        setTimeout(() => map.flyTo([lat, lng], 8, { duration: 1.2 }), 150);
+      }
+    }
+
+    function updateKPIs() {
+      const total = surveyData.length;
+      document.getElementById('kpiTotal').innerText = total;
+
+      if (total === 0) {
+        document.getElementById('kpiMaxLen').innerText = '0';
+        document.getElementById('kpiMaxDetail').innerText = '--';
+        document.getElementById('kpiAsymIndex').innerText = '1.00';
+        document.getElementById('kpiStrikeRate').innerText = '0';
+        document.getElementById('kpiAvgSubdue').innerText = '0';
+        return;
+      }
+
+      let maxRecord = surveyData.reduce((prev, cur) => (prev.length > cur.length) ? prev : cur);
+      document.getElementById('kpiMaxLen').innerText = maxRecord.length.toFixed(1);
+      document.getElementById('kpiMaxDetail').innerText = `${maxRecord.id} (${maxRecord.sex === 'Male' ? '♂' : '♀'})`;
+
+      let males = surveyData.filter(d => d.sex === 'Male');
+      let females = surveyData.filter(d => d.sex === 'Female');
+      if (males.length > 0) {
+        let avgAsym = males.reduce((acc, m) => acc + (m.mandibleR / m.mandibleL), 0) / males.length;
+        document.getElementById('kpiAsymIndex').innerText = avgAsym.toFixed(2);
+        let pctDiff = ((avgAsym - 1) * 100).toFixed(0);
+        document.getElementById('kpiAsymDiff').innerText = `右顎平均長 ${pctDiff}%`;
+      } else {
+        document.getElementById('kpiAsymIndex').innerText = '1.00';
+      }
+
+      let avgStrike = (surveyData.reduce((acc, c) => acc + c.strikeRate, 0) / total).toFixed(1);
+      document.getElementById('kpiStrikeRate').innerText = avgStrike;
+
+      let avgSubdue = (surveyData.reduce((acc, c) => acc + c.subdueTime, 0) / total).toFixed(1);
+      document.getElementById('kpiAvgSubdue').innerText = avgSubdue;
+
+      let maleSubdue = males.length > 0 ? (males.reduce((acc, c) => acc + c.subdueTime, 0) / males.length).toFixed(1) : 0;
+      let femaleSubdue = females.length > 0 ? (females.reduce((acc, c) => acc + c.subdueTime, 0) / females.length).toFixed(1) : 0;
+      document.getElementById('kpiSubdueCompare').innerText = `♂ ${maleSubdue}s vs ♀ ${femaleSubdue}s`;
+    }
+
+    function updateCharts() {
+      // 1. 異速生長散佈圖
+      const maleScatter = surveyData.filter(d => d.sex === 'Male').map(d => ({ x: d.length, y: d.mandibleR, id: d.id, prey: d.prey }));
+      const femaleScatter = surveyData.filter(d => d.sex === 'Female').map(d => ({ x: d.length, y: d.mandibleR, id: d.id, prey: d.prey }));
+
+      if (allometryChart) allometryChart.destroy();
+      const ctxAllo = document.getElementById('allometryChart').getContext('2d');
+      allometryChart = new Chart(ctxAllo, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: '雄性 ♂ (性擇武器顎)',
+              data: maleScatter,
+              backgroundColor: 'rgba(16, 185, 129, 0.85)',
+              borderColor: 'rgba(52, 211, 153, 1)',
+              pointRadius: 5
+            },
+            {
+              label: '雌性 ♀ (天擇攝食型顎)',
+              data: femaleScatter,
+              backgroundColor: 'rgba(245, 158, 11, 0.85)',
+              borderColor: 'rgba(251, 191, 36, 1)',
+              pointRadius: 5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              title: { display: true, text: '體長 (mm)', color: '#94a3b8', font: { size: 10 } },
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 9 } }
+            },
+            y: {
+              title: { display: true, text: '右巨顎長度 (mm)', color: '#94a3b8', font: { size: 10 } },
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 9 } }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#cbd5e1', font: { size: 10 } } }
+          }
+        }
+      });
+
+      // 2. 體長直方圖
+      const bins = ['45-49.9', '50-54.9', '55-59.9', '60-64.9', '65-70'];
+      let maleBins = [0, 0, 0, 0, 0];
+      let femaleBins = [0, 0, 0, 0, 0];
+      surveyData.forEach(item => {
+        let idx = item.length < 50 ? 0 : item.length < 55 ? 1 : item.length < 60 ? 2 : item.length < 65 ? 3 : 4;
+        if (item.sex === 'Male') maleBins[idx]++;
+        else femaleBins[idx]++;
+      });
+
+      if (histChart) histChart.destroy();
+      const ctxHist = document.getElementById('sizeHistogram').getContext('2d');
+      histChart = new Chart(ctxHist, {
+        type: 'bar',
+        data: {
+          labels: bins.map(b => b + ' mm'),
+          datasets: [
+            { label: '雄性 (♂)', data: maleBins, backgroundColor: 'rgba(16, 185, 129, 0.75)', borderWidth: 1 },
+            { label: '雌性 (♀)', data: femaleBins, backgroundColor: 'rgba(245, 158, 11, 0.75)', borderWidth: 1 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8', font: { size: 9 } } },
+            y: { beginAtZero: true, ticks: { precision: 0, color: '#94a3b8', font: { size: 9 } }, grid: { color: 'rgba(255, 255, 255, 0.05)' } }
+          },
+          plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 10 } } } }
+        }
+      });
+
+      // 3. 獵物圓餅圖
+      let preyCounts = {};
+      surveyData.forEach(d => { preyCounts[d.prey] = (preyCounts[d.prey] || 0) + 1; });
+      if (preyChart) preyChart.destroy();
+      preyChart = new Chart(document.getElementById('preyChart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(preyCounts),
+          datasets: [{ data: Object.values(preyCounts), backgroundColor: ['#f43f5e', '#fb923c', '#fbbf24', '#a855f7', '#06b6d4'], borderWidth: 2, borderColor: '#181c19' }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 9 }, boxWidth: 8 } } },
+          cutout: '60%'
+        }
+      });
+
+      // 4. 樣區圓餅圖
+      let locCounts = {};
+      surveyData.forEach(d => { let locName = d.location.split(' ')[0]; locCounts[locName] = (locCounts[locName] || 0) + 1; });
+      if (locChart) locChart.destroy();
+      locChart = new Chart(document.getElementById('locationChart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(locCounts),
+          datasets: [{ data: Object.values(locCounts), backgroundColor: ['#10b981', '#0ea5e9', '#f59e0b', '#8b5cf6'], borderWidth: 2, borderColor: '#181c19' }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 9 }, boxWidth: 8 } } },
+          cutout: '60%'
+        }
+      });
+
+      // 5. 採集手法圓餅圖
+      let methodCounts = {};
+      surveyData.forEach(d => { methodCounts[d.method] = (methodCounts[d.method] || 0) + 1; });
+      if (methodChart) methodChart.destroy();
+      methodChart = new Chart(document.getElementById('methodChart').getContext('2d'), {
+        type: 'pie',
+        data: {
+          labels: Object.keys(methodCounts),
+          datasets: [{ data: Object.values(methodCounts), backgroundColor: ['#14b8a6', '#f97316', '#6366f1'], borderWidth: 2, borderColor: '#181c19' }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 9 }, boxWidth: 8 } } }
+        }
+      });
+    }
+
+    function renderTable() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const sexFilter = document.getElementById('sexFilter').value;
+      const preyFilter = document.getElementById('preyFilter').value;
+
+      const filtered = surveyData.filter(d => {
+        const matchesSearch = d.id.toLowerCase().includes(search) || d.location.toLowerCase().includes(search) || d.prey.toLowerCase().includes(search) || d.collector.toLowerCase().includes(search);
+        const matchesSex = sexFilter === 'ALL' || d.sex === sexFilter;
+        const matchesPrey = preyFilter === 'ALL' || d.prey === preyFilter;
+        return matchesSearch && matchesSex && matchesPrey;
+      });
+
+      document.getElementById('recordCount').innerText = filtered.length;
+      const tbody = document.getElementById('dataTableBody');
+      tbody.innerHTML = '';
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="12" class="py-8 text-center text-stone-500 font-sans">查無相符數據</td></tr>`;
+        return;
+      }
+
+      filtered.forEach(item => {
+        const asymRatio = (item.mandibleR / item.mandibleL).toFixed(2);
+        const tier = getSelectionTier(item);
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-stone-800/40 transition-colors border-b border-stone-800/50";
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-semibold text-emerald-400 cursor-pointer hover:underline" onclick="focusMap(${item.lat}, ${item.lng})">${item.id}</td>
+          <td class="py-3 px-4 text-stone-400">${item.date}</td>
+          <td class="py-3 px-4 text-stone-200 font-sans cursor-pointer hover:text-emerald-400" onclick="focusMap(${item.lat}, ${item.lng})">${item.location}</td>
+          <td class="py-3 px-4">
+            <span class="px-2 py-0.5 rounded text-[11px] font-semibold ${item.sex === 'Male' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'}">
+              ${item.sex === 'Male' ? '雄性 ♂' : '雌性 ♀'}
+            </span>
+          </td>
+          <td class="py-3 px-4 font-bold text-stone-100">${item.length.toFixed(1)}</td>
+          <td class="py-3 px-4 text-stone-300">${item.mandibleR.toFixed(1)} / ${item.mandibleL.toFixed(1)} <span class="text-purple-400 text-[10px]">(${asymRatio})</span></td>
+          <td class="py-3 px-4 font-sans text-rose-300 font-semibold">${item.prey}</td>
+          <td class="py-3 px-4 text-stone-200">${item.preySize.toFixed(1)} mm</td>
+          <td class="py-3 px-4 text-amber-400 font-bold">${item.subdueTime} 秒</td>
+          <td class="py-3 px-4 text-emerald-400">${item.strikeRate}%</td>
+          <td class="py-3 px-4">
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold border ${tier.color}">${tier.label}</span>
+          </td>
+          <td class="py-3 px-4 text-center">
+            <button onclick="deleteRecord('${item.id}')" class="text-stone-500 hover:text-rose-400 transition" title="刪除">
+              <i data-lucide="trash-2" class="w-4 h-4 inline"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      lucide.createIcons();
+    }
+
+    function autoFillCoords() {
+      const loc = document.getElementById('formLocation').value;
+      if (locationDefaults[loc]) {
+        const jitterLat = (Math.random() - 0.5) * 0.05;
+        const jitterLng = (Math.random() - 0.5) * 0.05;
+        document.getElementById('formLat').value = (locationDefaults[loc].lat + jitterLat).toFixed(4);
+        document.getElementById('formLng').value = (locationDefaults[loc].lng + jitterLng).toFixed(4);
+      }
+    }
+
+    function openModal() {
+      const nextNum = String(surveyData.length + 1).padStart(3, '0');
+      document.getElementById('formId').value = `MAN-2026-${nextNum}`;
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      document.getElementById('formDate').value = now.toISOString().slice(0, 16);
+      autoFillCoords();
+      document.getElementById('addModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('addModal').classList.add('hidden');
+      document.getElementById('recordForm').reset();
+    }
+
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      const newEntry = {
+        id: document.getElementById('formId').value.trim(),
+        date: document.getElementById('formDate').value.replace('T', ' '),
+        location: document.getElementById('formLocation').value,
+        lat: parseFloat(document.getElementById('formLat').value),
+        lng: parseFloat(document.getElementById('formLng').value),
+        sex: document.getElementById('formSex').value,
+        length: parseFloat(document.getElementById('formLength').value),
+        mandibleL: parseFloat(document.getElementById('formMandibleLeft').value),
+        mandibleR: parseFloat(document.getElementById('formMandibleRight').value),
+        prey: document.getElementById('formPreyType').value,
+        preySize: parseFloat(document.getElementById('formPreySize').value),
+        subdueTime: parseInt(document.getElementById('formSubdueTime').value),
+        strikeRate: parseInt(document.getElementById('formStrikeSuccess').value),
+        temp: parseFloat(document.getElementById('formTemp').value),
+        method: document.getElementById('formMethod').value,
+        collector: document.getElementById('formCollector').value.trim()
+      };
+
+      surveyData.unshift(newEntry);
+      closeModal();
+      updateKPIs();
+      updateCharts();
+      updateMapMarkers();
+      renderTable();
+      focusMap(newEntry.lat, newEntry.lng);
+    }
+
+    function deleteRecord(id) {
+      if (confirm(`確定要刪除標本 ${id} 嗎？`)) {
+        surveyData = surveyData.filter(d => d.id !== id);
+        updateKPIs();
+        updateCharts();
+        updateMapMarkers();
+        renderTable();
+      }
+    }
+
+    function exportCSV() {
+      if (surveyData.length === 0) return alert('無數據可匯出');
+      let csvContent = "\uFEFF標本ID,採集時間,樣區地點,緯度(Lat),經度(Lng),性別,體長(mm),左顎長(mm),右顎長(mm),捕獲獵物,獵物長度(mm),制伏時間(秒),成功率(%),天擇適應位階,溫度(°C),採集手法,調查員\n";
+      surveyData.forEach(d => {
+        const tier = getSelectionTier(d).label;
+        csvContent += `"${d.id}","${d.date}","${d.location}",${d.lat},${d.lng},"${d.sex}",${d.length},${d.mandibleL},${d.mandibleR},"${d.prey}",${d.preySize},${d.subdueTime},${d.strikeRate},"${tier}",${d.temp},"${d.method}","${d.collector}"\n`;
+      });
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `manticora_survey_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initMap();
+      updateKPIs();
+      updateCharts();
+      renderTable();
+    });
+  </script>
+</body>
+</html>
